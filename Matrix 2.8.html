@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Matrix Treasure Hunt 3D RPG - Online Multiplayer</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for RPG Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Kanit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- PeerJS for Standalone WebRTC Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        * {
+            font-family: 'Kanit', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0c0a09;
+            color: #f3f4f6;
+        }
+
+        /* เอา Three.js Canvas Container เดิมออก หรือซ่อนไว้ */
+        #canvas-container {
+            display: none;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85);
+        }
+
+        .glass-panel-gold {
+            background: rgba(28, 19, 10, 0.92);
+            backdrop-filter: blur(16px);
+            border: 1.5px solid rgba(245, 158, 11, 0.6);
+            box-shadow: 0 0 35px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-rpg {
+            position: relative;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.6);
+        }
+
+        .btn-rpg:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.18);
+        }
+
+        .btn-rpg:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+        }
+
+        .matrix-table {
+            border-left: 3px solid #f59e0b;
+            border-right: 3px solid #f59e0b;
+            padding: 2px 6px;
+            margin: 0 4px;
+            display: inline-table;
+            vertical-align: middle;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+        }
+
+        .matrix-table td {
+            padding: 3px 8px;
+            text-align: center;
+            font-family: monospace;
+            font-weight: 800;
+            color: #fbbf24;
+            font-size: 1.1em;
+        }
+
+        @keyframes floatAnim {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .animate-float {
+            animation: floatAnim 3s ease-in-out infinite;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+        ::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.5); border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-stone-950 text-white overflow-hidden select-none">
+
+    <!-- STATIC IMAGE BACKGROUND (ใส่รูปภาพแฟนตาซีที่คุณส่งมาเรียบร้อยแล้ว) -->
+    <div class="fixed top-0 left-0 w-full h-full z-0 pointer-events-none">
+        <img src="https://i.postimg.cc/4ySNz8y3/86db2f2f-8143-43f2-9595-c9078d3686dc.jpg" alt="Fantasy Background" class="w-full h-full object-cover opacity-60">
+    </div>
+
+    <!-- เอา Three.js Canvas Container เดิมออก -->
+    <div id="canvas-container"></div>
+
+    <!-- IN-GAME TOAST NOTIFICATION -->
+    <div id="game-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-4">
+        <div class="glass-panel-gold px-6 py-3 rounded-2xl border-amber-400/80 shadow-2xl flex items-center gap-3">
+            <i id="toast-icon" class="fa-solid fa-circle-check text-amber-400 text-2xl"></i>
+            <span id="game-toast-text" class="text-amber-200 font-extrabold text-sm sm:text-base">ข้อความแจ้งเตือน</span>
+        </div>
+    </div>
+
+    <!-- FLOW 1: LOGIN / REGISTER SCREEN -->
+    <div id="screen-auth" class="absolute inset-0 z-40 flex items-center justify-center p-4 bg-stone-950/70">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-8 border-amber-500/40 relative flex flex-col">
+            
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-400/50 text-3xl mb-3 shadow-lg shadow-amber-500/20 animate-float">
+                    <i class="fa-solid fa-dragon"></i>
+                </div>
+                <h1 class="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-300 to-amber-500">
+                    MATRIX ISEKAI RPG
+                </h1>
+                <p class="text-amber-200/90 text-xs mt-1 font-semibold">ขั้นตอนที่ 1: ลงชื่อเข้าใช้หรือสมัครสมาชิกใหม่</p>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="flex bg-slate-950 p-1 rounded-xl mb-4 border border-slate-800">
+                <button id="tab-btn-login" class="flex-1 py-2 rounded-lg font-bold text-sm bg-amber-500 text-slate-950 transition">เข้าสู่ระบบ</button>
+                <button id="tab-btn-register" class="flex-1 py-2 rounded-lg font-bold text-sm text-slate-400 hover:text-white transition">สมัครสมาชิกใหม่</button>
+            </div>
+
+            <form id="auth-form" onsubmit="return false;" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-amber-400 uppercase mb-1">ชื่อผู้ใช้ (Username)</label>
+                    <input type="text" id="auth-username" maxlength="16" placeholder="กรอกชื่อผู้ใช้..." required
+                        class="w-full bg-slate-950/90 border-2 border-slate-700 rounded-xl px-4 py-2.5 text-white font-bold placeholder-slate-500 focus:outline-none focus:border-amber-400 transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-amber-400 uppercase mb-1">รหัสผ่าน (Password)</label>
+                    <input type="password" id="auth-password" maxlength="20" placeholder="กรอกรหัสผ่าน..." required
+                        class="w-full bg-slate-950/90 border-2 border-slate-700 rounded-xl px-4 py-2.5 text-white font-bold placeholder-slate-500 focus:outline-none focus:border-amber-400 transition">
+                </div>
+
+                <button id="btn-submit-auth" class="btn-rpg w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-2">
+                    <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- FLOW 2: LOBBY & ROOM CREATION SCREEN -->
+    <div id="screen-lobby" class="hidden absolute inset-0 z-40 flex items-center justify-center p-4 bg-stone-950/70">
+        <div class="glass-panel max-w-2xl w-full rounded-3xl p-6 sm:p-8 border-amber-500/40 relative flex flex-col max-h-[95vh] overflow-y-auto">
+            
+            <!-- User Status Header -->
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                <div class="flex items-center gap-2.5">
+                    <div id="user-avatar" class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-base shadow">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div>
+                        <div id="display-user-name" class="font-black text-white text-base">Username</div>
+                        <div class="text-[10px] text-teal-400 font-semibold">ล็อกอินเรียบร้อยแล้ว</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-show-my-stats" class="text-xs bg-slate-900 border border-slate-700 hover:border-amber-400 text-amber-300 px-3 py-1.5 rounded-xl font-bold cursor-pointer">
+                        <i class="fa-solid fa-chart-line"></i> สถิติของฉัน
+                    </button>
+                    <button id="btn-logout" class="text-xs bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border border-rose-500/40 px-3 py-1.5 rounded-xl font-bold cursor-pointer">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+
+            <!-- Role & Color Setup -->
+            <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-700/80 mb-4 space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-400 uppercase mb-1">เลือกบทบาท (Role)</label>
+                        <select id="select-player-role" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:border-amber-400">
+                            <option value="player">⚔️ ผู้เล่น (Player)</option>
+                            <option value="spectator">👁️ ผู้สังเกตการณ์ (Observer)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-400 uppercase mb-1">เลือกสีออร่าประจำตัว</label>
+                        <div class="flex items-center gap-2 pt-0.5">
+                            <button type="button" class="color-opt-btn w-7 h-7 rounded-full bg-amber-500 border-2 border-white scale-110 cursor-pointer" data-color="#f59e0b"></button>
+                            <button type="button" class="color-opt-btn w-7 h-7 rounded-full bg-blue-500 border-2 border-transparent hover:scale-105 cursor-pointer" data-color="#3b82f6"></button>
+                            <button type="button" class="color-opt-btn w-7 h-7 rounded-full bg-emerald-500 border-2 border-transparent hover:scale-105 cursor-pointer" data-color="#10b981"></button>
+                            <button type="button" class="color-opt-btn w-7 h-7 rounded-full bg-purple-500 border-2 border-transparent hover:scale-105 cursor-pointer" data-color="#a855f7"></button>
+                            <button type="button" class="color-opt-btn w-7 h-7 rounded-full bg-rose-500 border-2 border-transparent hover:scale-105 cursor-pointer" data-color="#f43f5e"></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Room Control Actions -->
+            <div id="lobby-room-controls" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button id="btn-create-room" class="btn-rpg py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-lg">
+                        <i class="fa-solid fa-plus-circle text-lg"></i> สร้างห้องใหม่ (Host)
+                    </button>
+                    
+                    <div class="flex gap-2">
+                        <input type="text" id="input-room-code" placeholder="รหัสห้อง 6 หลัก" maxlength="6"
+                            class="w-full bg-slate-900 border-2 border-slate-700 rounded-2xl px-3 text-center text-amber-300 font-extrabold uppercase placeholder-slate-500 focus:outline-none focus:border-amber-400 text-sm">
+                        <button id="btn-join-room" class="btn-rpg px-4 bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-1 shrink-0 cursor-pointer">
+                            <i class="fa-solid fa-right-to-bracket"></i> เข้าร่วม
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Room Lobby Box -->
+            <div id="lobby-active-room-box" class="hidden space-y-4 mt-2">
+                <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-center relative">
+                    <div class="text-xs font-bold text-amber-300 uppercase tracking-wider mb-1">รหัสห้องสำหรับเข้าร่วม (Room Code)</div>
+                    <div id="display-room-code" class="text-3xl font-black text-amber-400 tracking-widest font-mono select-all">------</div>
+                    
+                    <div class="flex justify-center gap-2 mt-2">
+                        <button id="btn-copy-code" class="btn-rpg px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-copy"></i> คัดลอกรหัสห้อง
+                        </button>
+                        <button id="btn-copy-room-link" class="btn-rpg px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-share-nodes"></i> คัดลอกข้อความเชิญ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Host Settings Configuration (Observer / Host Only) -->
+                <div id="host-config-panel" class="bg-slate-900/90 rounded-2xl p-4 border border-slate-700 space-y-3">
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <span class="text-xs font-extrabold text-amber-400 uppercase flex items-center gap-1.5">
+                            <i class="fa-solid fa-sliders"></i> ตั้งค่าการทดสอบ (Observer / Host Controls)
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-bold text-slate-300">เวลาเล่น (นาที):</label>
+                            <select id="select-time-limit" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-bold">
+                                <option value="5">5 นาที</option>
+                                <option value="10" selected>10 นาที</option>
+                                <option value="15">15 นาที</option>
+                                <option value="20">20 นาที</option>
+                                <option value="30">30 นาที</option>
+                                <option value="0">ไม่จำกัดเวลา</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-300 uppercase mb-2">เลือกเรื่องที่จะทดสอบในห้องนี้ (เลือกอย่างน้อย 1 เรื่อง):</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 text-xs">
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="1" checked> 1. สมบัติการเท่ากัน (5 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="2" checked> 2. การบวกการลบเมทริกซ์ (5 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="3" checked> 3. การคูณเมทริกซ์ (5 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="4" checked> 4. การทรานสโพส (3 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="5" checked> 5. ดีเทอร์มิแนนต์ & โคแฟกเตอร์ (3 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="6" checked> 6. สมบัติดีเทอร์มิแนนต์ (3 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="7" checked> 7. อินเวอร์สการคูณเมทริกซ์ (3 ข้อ)
+                            </label>
+                            <label class="flex items-center gap-2 bg-slate-950/70 p-2 rounded-xl border border-slate-800 cursor-pointer">
+                                <input type="checkbox" class="topic-check" value="8" checked> 8. การแก้ระบบสมการเชิงเส้น (3 ข้อ)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/90 rounded-2xl p-4 border border-slate-800">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-xs font-extrabold text-slate-300 uppercase">สมาชิกในห้อง (<span id="room-player-count">1</span> / 50 คน)</span>
+                        <span id="host-wait-badge" class="text-[11px] text-amber-400 font-bold">👑 คุณคือผู้สังเกตการณ์ / หัวหน้าห้อง</span>
+                    </div>
+
+                    <div id="room-players-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1">
+                        <!-- Dynamic Player Cards -->
+                    </div>
+                </div>
+
+                <div id="lobby-host-actions">
+                    <button id="btn-host-start-game" class="btn-rpg w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-lg rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-xl">
+                        <i class="fa-solid fa-play text-xl"></i> เริ่มการทดสอบพร้อมกันทุกคน!
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATTLE HUD & QUESTION SCREEN OVERLAY (FOR PLAYERS) -->
+    <div id="screen-battle" class="hidden absolute inset-0 z-20 flex flex-col justify-between p-3 sm:p-5 pointer-events-none">
+        
+        <div class="pointer-events-auto max-w-4xl mx-auto w-full space-y-2.5">
+            <div class="glass-panel px-4 py-2.5 rounded-2xl border-amber-500/40 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span id="battle-stage-tag" class="text-xs sm:text-sm font-black text-amber-300 bg-amber-500/20 px-3 py-1 rounded-xl border border-amber-500/40">
+                        เรื่องที่ 1: สมบัติการเท่ากัน
+                    </span>
+                    <span id="battle-wave-tag" class="text-xs font-bold text-slate-300 bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-700">
+                        ข้อที่: 1 / 5
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">เวลาคงเหลือ</div>
+                        <div id="game-timer-display" class="text-sm sm:text-base font-black text-rose-400 font-mono">10:00</div>
+                    </div>
+                    <div class="text-right border-l border-slate-700 pl-3">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">คะแนนสะสม</div>
+                        <div id="my-score-display" class="text-sm sm:text-base font-black text-amber-400">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="quiz-dock-panel" class="glass-panel-gold rounded-3xl p-4 sm:p-6 border-2 border-amber-500/60 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-sm shadow">
+                            <i class="fa-solid fa-calculator"></i>
+                        </div>
+                        <span class="text-sm font-black text-amber-300 uppercase tracking-wider">โจทย์คณิตศาสตร์เมทริกซ์</span>
+                    </div>
+                    <span id="quiz-diff-label" class="text-xs font-extrabold text-amber-400 bg-amber-950/80 px-3 py-1 rounded-full border border-amber-500/40">
+                        โจทย์สุ่มรายบุคคล
+                    </span>
+                </div>
+
+                <div id="quiz-question-container" class="bg-slate-950/90 rounded-2xl p-4 text-center text-white font-bold text-base sm:text-lg border border-amber-500/30 mb-4 min-h-[110px] flex items-center justify-center shadow-inner overflow-x-auto">
+                    กำลังโหลดคำถาม...
+                </div>
+
+                <div id="quiz-options-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <!-- Dynamic option buttons -->
+                </div>
+            </div>
+        </div>
+
+        <div class="pointer-events-auto max-w-4xl mx-auto w-full flex justify-between items-end gap-3">
+            <div id="battle-party-cards" class="flex flex-wrap gap-2 max-w-md">
+                <!-- Dynamic Player Party Cards -->
+            </div>
+        </div>
+    </div>
+
+    <!-- SPECTATOR HUD OVERLAY (FOR OBSERVERS) -->
+    <div id="screen-spectator" class="hidden absolute inset-0 z-30 flex flex-col justify-between p-4 pointer-events-none">
+        <div class="pointer-events-auto max-w-2xl mx-auto w-full glass-panel-gold rounded-3xl p-5 border-2 border-amber-500/70 shadow-2xl mt-4">
+            <div class="flex justify-between items-center mb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-teal-500 text-slate-950 font-black flex items-center justify-center text-sm shadow">
+                        <i class="fa-solid fa-eye"></i>
+                    </div>
+                    <span class="text-sm font-black text-teal-300 uppercase tracking-wider">แผงควบคุมผู้สังเกตการณ์ (Observer Dashboard)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="spec-timer-display" class="text-xs font-bold text-rose-400 bg-slate-950 px-2.5 py-1 rounded-full border border-rose-500/40 font-mono">10:00</span>
+                    <button id="btn-close-room-spec" class="text-xs font-extrabold bg-rose-500 hover:bg-rose-400 text-white px-3 py-1 rounded-full cursor-pointer shadow">
+                        <i class="fa-solid fa-power-off"></i> ยุบห้อง
+                    </button>
+                    <button id="btn-open-all-stats" class="text-xs font-extrabold bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1 rounded-full cursor-pointer shadow">
+                        <i class="fa-solid fa-chart-pie"></i> สถิติผู้เล่นทั้งหมด
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-950/90 rounded-2xl p-4 border border-teal-500/30 mb-3">
+                <div class="text-xs font-bold text-slate-400 uppercase mb-2 flex justify-between">
+                    <span>ตารางคะแนนผู้เล่น Real-time (สูงสุด 50 คน)</span>
+                    <span id="spec-stage-badge" class="text-amber-400">กำลังทดสอบ...</span>
+                </div>
+                <div id="spectator-leaderboard" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <!-- Rendered live player list & scores -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- USER STATS MODAL (FOR PLAYERS / OBSERVERS) -->
+    <div id="modal-stats" class="hidden fixed inset-0 z-50 bg-stone-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel max-w-2xl w-full rounded-3xl p-6 border-2 border-teal-500/60 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+                <h2 id="stats-modal-title" class="text-xl font-black text-teal-300 flex items-center gap-2">
+                    <i class="fa-solid fa-square-poll-vertical"></i> ประวัติและสถิติคะแนนการทดสอบ
+                </h2>
+                <button id="btn-close-stats" class="text-slate-400 hover:text-white text-xl cursor-pointer">&times;</button>
+            </div>
+
+            <div id="stats-content-list" class="space-y-3">
+                <!-- Dynamic Stats Rendered Here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAILED SOLUTION MODAL -->
+    <div id="modal-solution" class="hidden fixed inset-0 z-50 bg-stone-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="glass-panel-gold max-w-2xl w-full rounded-3xl p-6 sm:p-8 border-2 border-amber-500/60 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+            
+            <div class="text-center mb-4">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/40 text-2xl mb-2 shadow-lg">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h2 class="text-2xl font-black text-rose-400">ยังไม่ถูกต้อง! เฉลยและวิธีคิด</h2>
+                <p class="text-slate-300 text-xs mt-1">ศึกษาขั้นตอนการคำนวณที่ถูกต้อง แล้วลุยต่อข้อถัดไปกันเลย!</p>
+            </div>
+
+            <div class="bg-slate-950/90 rounded-2xl p-4 border border-amber-500/40 mb-4 text-center">
+                <span class="text-xs font-bold text-slate-400 block mb-1">คำตอบที่ถูกต้องคือ</span>
+                <span id="solution-correct-ans" class="text-2xl sm:text-3xl font-black text-amber-400 font-mono">0</span>
+            </div>
+
+            <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-700 mb-5">
+                <h3 class="text-sm font-black text-amber-300 mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> คำอธิบายวิธีทำอย่างละเอียด:
+                </h3>
+                <div id="solution-explanation-text" class="text-sm text-slate-200 leading-relaxed space-y-2">
+                    <!-- Dynamic explanation -->
+                </div>
+            </div>
+
+            <button id="btn-next-question" class="btn-rpg w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-base rounded-2xl cursor-pointer shadow-xl">
+                เข้าใจแล้ว ไปยังข้อถัดไป <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- AUDIO SYNTHESIZER & GAME ENGINE JAVASCRIPT -->
+    <script>
+        const audioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            playClick() {
+                try {
+                    this.init(); if (!this.ctx) return;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.05);
+                } catch(e) {}
+            },
+            playCorrect() {
+                try {
+                    this.init(); if (!this.ctx) return;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.25);
+                    this.playApplause();
+                } catch(e) {}
+            },
+            playWrong() {
+                try {
+                    this.init(); if (!this.ctx) return;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(90, this.ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+                } catch(e) {}
+            },
+            playApplause() {
+                try {
+                    if (!this.ctx) return;
+                    const bufferSize = this.ctx.sampleRate * 1.5;
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = Math.random() * 2 - 1;
+                    }
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 1200;
+                    filter.Q.value = 1.0;
+
+                    const gain = this.ctx.createGain();
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.5);
+
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    noise.start();
+                } catch(e) {}
+            }
+        };
+
+        function triggerConfetti() {
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+            }
+        }
+
+        function showToast(msg, isSuccess = true) {
+            const toast = document.getElementById('game-toast');
+            const text = document.getElementById('game-toast-text');
+            const icon = document.getElementById('toast-icon');
+            if (!toast || !text) return;
+            text.textContent = msg;
+            icon.className = isSuccess ? "fa-solid fa-circle-check text-emerald-400 text-2xl" : "fa-solid fa-triangle-exclamation text-rose-400 text-2xl";
+            toast.classList.remove('opacity-0', '-translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', '-translate-y-4');
+            }, 3200);
+        }
+
+        const STAGE_TOPICS = {
+            1: { title: "สมบัติการเท่ากัน", count: 5 },
+            2: { title: "การบวกและลบเมทริกซ์", count: 5 },
+            3: { title: "การคูณเมทริกซ์", count: 5 },
+            4: { title: "การทรานสโพส", count: 3 },
+            5: { title: "ดีเทอร์มิแนนต์ & โคแฟกเตอร์", count: 3 },
+            6: { title: "สมบัติดีเทอร์มิแนนต์", count: 3 },
+            7: { title: "อินเวอร์สการคูณเมทริกซ์", count: 3 },
+            8: { title: "การแก้ระบบสมการเชิงเส้น", count: 3 }
+        };
+
+        const gameState = {
+            selectedTopics: [1, 2, 3, 4, 5, 6, 7, 8],
+            timeLimitMin: 10,
+            timeRemainingSec: 600,
+            timerInterval: null,
+            currentTopicIndex: 0,
+            currentQuestionIdx: 0,
+            stageCorrectCount: 0,
+            totalQuizScore: 0,
+            currentQuiz: null,
+            authMode: 'login',
+            myPlayer: { id: null, username: "", color: "#f59e0b", role: "player", score: 0 }
+        };
+
+        let peer = null;
+        let hostConn = null;
+        let guestConnections = [];
+        let isHost = false;
+        let currentRoomId = null;
+        let roomState = { status: 'waiting', topics: [1,2,3,4,5,6,7,8], timeLimitMin: 10, currentTopic: 1, players: {} };
+
+        // --- AUTHENTICATION & USER PROFILE FLOW ---
+        function handleAuthSubmit() {
+            const u = document.getElementById('auth-username').value.trim();
+            const p = document.getElementById('auth-password').value.trim();
+
+            if (!u || !p) {
+                showToast("กรุณากรอก Username และ Password ให้ครบถ้วน", false);
+                return;
+            }
+
+            let accounts = JSON.parse(localStorage.getItem('mx_accounts') || '{}');
+
+            if (gameState.authMode === 'login') {
+                if (!accounts[u]) {
+                    showToast("ไม่พบบัญชีผู้ใช้นี้ กรุณาสมัครสมาชิกใหม่", false);
+                    return;
+                }
+                if (accounts[u].password !== p) {
+                    showToast("รหัสผ่านไม่ถูกต้อง!", false);
+                    return;
+                }
+                showToast("เข้าสู่ระบบสำเร็จ!", true);
+            } else { // Register
+                if (accounts[u]) {
+                    showToast("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว กรุณาลองชื่ออื่น", false);
+                    return;
+                }
+                accounts[u] = { password: p, attempts: [] };
+                localStorage.setItem('mx_accounts', JSON.stringify(accounts));
+                showToast("สมัครสมาชิกใหม่สำเร็จ!", true);
+            }
+
+            gameState.myPlayer.username = u;
+            document.getElementById('display-user-name').textContent = u;
+            showScreen('screen-lobby');
+        }
+
+        function saveUserProfile(username, score, timeSec) {
+            let accounts = JSON.parse(localStorage.getItem('mx_accounts') || '{}');
+            if (!accounts[username]) {
+                accounts[username] = { password: "1234", attempts: [] };
+            }
+            accounts[username].attempts.push({
+                date: new Date().toLocaleDateString('th-TH'),
+                score: score,
+                timeSec: timeSec
+            });
+            localStorage.setItem('mx_accounts', JSON.stringify(accounts));
+        }
+
+        function showUserStats(targetUsername = null) {
+            const modal = document.getElementById('modal-stats');
+            const list = document.getElementById('stats-content-list');
+            const title = document.getElementById('stats-modal-title');
+            list.innerHTML = '';
+
+            const accounts = JSON.parse(localStorage.getItem('mx_accounts') || '{}');
+
+            if (targetUsername) {
+                title.innerHTML = `<i class="fa-solid fa-user-chart"></i> สถิติการทดสอบของ: <span class="text-amber-400">${targetUsername}</span>`;
+                const user = accounts[targetUsername];
+                if (user && user.attempts && user.attempts.length > 0) {
+                    user.attempts.forEach((att, i) => {
+                        const item = document.createElement('div');
+                        item.className = "bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center text-sm";
+                        item.innerHTML = `<span>ครั้งที่ ${i+1} (${att.date})</span> <span class="font-bold text-amber-400">${att.score} คะแนน (${Math.floor(att.timeSec/60)}m ${att.timeSec%60}s)</span>`;
+                        list.appendChild(item);
+                    });
+                } else {
+                    list.innerHTML = '<div class="text-center text-slate-400 py-4">ยังไม่มีสถิติประวัติการเล่น</div>';
+                }
+            } else { // Observer View (Show All)
+                title.innerHTML = `<i class="fa-solid fa-users-viewfinder"></i> สถิติล่าสุดของผู้เล่นทุกคนในระบบ`;
+                const allKeys = Object.keys(accounts);
+                if (allKeys.length > 0) {
+                    allKeys.forEach(uKey => {
+                        const u = accounts[uKey];
+                        if (u.attempts && u.attempts.length > 0) {
+                            const lastAtt = u.attempts[u.attempts.length - 1];
+                            const item = document.createElement('div');
+                            item.className = "bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center text-sm cursor-pointer hover:border-amber-500";
+                            item.onclick = () => showUserStats(uKey);
+                            item.innerHTML = `
+                                <div>
+                                    <span class="font-extrabold text-white block">${uKey}</span>
+                                    <span class="text-[10px] text-slate-400">ทดสอบ ${u.attempts.length} ครั้ง</span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-bold text-amber-400 block">${lastAtt.score} คะแนน</span>
+                                    <span class="text-[10px] text-slate-400">${lastAtt.date}</span>
+                                </div>`;
+                            list.appendChild(item);
+                        }
+                    });
+                } else {
+                    list.innerHTML = '<div class="text-center text-slate-400 py-4">ยังไม่มีข้อมูลผู้เล่นในระบบ</div>';
+                }
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // --- MATRIX HTML RENDER ---
+        function renderMatrixHTML(matrix) {
+            let html = '<table class="matrix-table">';
+            for (let r = 0; r < matrix.length; r++) {
+                html += '<tr>';
+                for (let c = 0; c < matrix[r].length; c++) {
+                    html += `<td>${matrix[r][c]}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+            return html;
+        }
+
+        // --- DYNAMIC MATRIX QUIZ GENERATOR FOR 8 TOPICS ---
+        function generateMatrixQuiz(topic, qIdx) {
+            const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+            let questionHtml = '';
+            let correctAnswer = 0;
+            let options = [];
+            let explanation = '';
+
+            const is3x3 = Math.random() > 0.5;
+            const dim = is3x3 ? 3 : 2;
+
+            if (topic === 1) {
+                const targetR = rand(0, dim - 1);
+                const targetC = rand(0, dim - 1);
+                const targetVal = rand(1, 15);
+                let matA = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 9)));
+                let matB = matA.map(row => [...row]);
+                matA[targetR][targetC] = 'x';
+                matB[targetR][targetC] = targetVal;
+                correctAnswer = targetVal;
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>กำหนดให้ </span>${renderMatrixHTML(matA)}<span>=</span>${renderMatrixHTML(matB)}<span>จงหาค่า x (ตำแหน่ง [${targetR+1},${targetC+1}])</span></div>`;
+                explanation = `<strong>สมบัติการเท่ากัน:</strong> เมทริกซ์เท่ากันทุกตำแหน่ง ตำแหน่ง [${targetR+1},${targetC+1}] จะได้ <strong>x = ${targetVal}</strong>`;
+
+            } else if (topic === 2) {
+                const isAdd = Math.random() > 0.5;
+                const op = isAdd ? '+' : '-';
+                const targetR = rand(0, dim - 1);
+                const targetC = rand(0, dim - 1);
+                let matA = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 9)));
+                let matB = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 9)));
+                const valA = matA[targetR][targetC], valB = matB[targetR][targetC];
+                correctAnswer = isAdd ? (valA + valB) : (valA - valB);
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>ผลลัพธ์ตำแหน่ง [${targetR+1},${targetC+1}] ของ </span>${renderMatrixHTML(matA)} <span class="text-amber-400 font-bold">${op}</span> ${renderMatrixHTML(matB)}</div>`;
+                explanation = `<strong>การ${isAdd ? 'บวก' : 'ลบ'}เมทริกซ์:</strong> นำสมาชิกตำแหน่ง [${targetR+1},${targetC+1}] มา${isAdd ? 'บวก' : 'ลบ'}กัน: <code>${valA} ${op} ${valB} = ${correctAnswer}</code>`;
+
+            } else if (topic === 3) {
+                const targetR = rand(0, dim - 1);
+                const targetC = rand(0, dim - 1);
+                let matA = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 4)));
+                let matB = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 4)));
+                let sum = 0, steps = [];
+                for (let k = 0; k < dim; k++) {
+                    sum += matA[targetR][k] * matB[k][targetC];
+                    steps.push(`(${matA[targetR][k]}×${matB[k][targetC]})`);
+                }
+                correctAnswer = sum;
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>ผลลัพธ์ตำแหน่ง [${targetR+1},${targetC+1}] ของ (A × B) เมื่อ </span><br><span>A = </span>${renderMatrixHTML(matA)} <span>B = </span>${renderMatrixHTML(matB)}</div>`;
+                explanation = `<strong>การคูณเมทริกซ์:</strong> แถวที่ ${targetR+1} ดอท หลักที่ ${targetC+1}: <code>${steps.join(' + ')} = ${correctAnswer}</code>`;
+
+            } else if (topic === 4) {
+                const targetR = rand(0, dim - 1);
+                const targetC = rand(0, dim - 1);
+                let matA = Array.from({ length: dim }, () => Array.from({ length: dim }, () => rand(1, 9)));
+                correctAnswer = matA[targetC][targetR];
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>ถ้า A = </span>${renderMatrixHTML(matA)} <span>จงหาค่าสมาชิก (A<sup>T</sup>)<sub>${targetR+1},${targetC+1}</sub></span></div>`;
+                explanation = `<strong>การทรานสโพส (A<sup>T</sup>):</strong> สลับแถวเป็นหลัก: สมาชิก (A<sup>T</sup>)<sub>${targetR+1},${targetC+1}</sub> = A<sub>${targetC+1},${targetR+1}</sub> = <code>${correctAnswer}</code>`;
+
+            } else if (topic === 5) {
+                if (!is3x3) {
+                    const a = rand(2, 6), b = rand(1, 5), c = rand(1, 5), d = rand(2, 6);
+                    correctAnswer = (a * d) - (b * c);
+                    questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>จงหาค่า det(A) เมื่อ A = </span>${renderMatrixHTML([[a, b], [c, d]])}</div>`;
+                    explanation = `<strong>ดีเทอร์มิแนนต์ 2x2:</strong> det(A) = (คูณลง) - (คูณขึ้น) = <code>(${a}×${d}) - (${b}×${c}) = ${correctAnswer}</code>`;
+                } else {
+                    const a11 = rand(1, 3), a21 = 0, a31 = 0;
+                    const a12 = rand(1, 3), a22 = rand(1, 3), a32 = rand(0, 2);
+                    const a13 = rand(1, 3), a23 = rand(1, 3), a33 = rand(1, 3);
+                    correctAnswer = a11 * ((a22 * a33) - (a23 * a32));
+                    const mat = [[a11, a12, a13], [a21, a22, a23], [a31, a32, a33]];
+
+                    questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>จงหา det(A) โดยกระจายโคแฟกเตอร์แถว/หลักที่ 1 เมื่อ A = </span>${renderMatrixHTML(mat)}</div>`;
+                    explanation = `<strong>การกระจายโคแฟกเตอร์:</strong> det(A) = a<sub>11</sub>C<sub>11</sub> = <code>${a11} × ((${a22}×${a33}) - (${a23}×${a32})) = ${correctAnswer}</code>`;
+                }
+
+            } else if (topic === 6) {
+                const detA = rand(2, 6);
+                const k = rand(2, 3);
+                correctAnswer = Math.pow(k, dim) * detA;
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>ถ้า A เป็นเมทริกซ์ ${dim}×${dim} และ det(A) = ${detA} จงหาค่า det(${k}A)</span></div>`;
+                explanation = `<strong>สมบัติดีเทอร์มิแนนต์:</strong> det(k·A) = k<sup>n</sup> · det(A) = <code>${k}<sup>${dim}</sup> × ${detA} = ${correctAnswer}</code>`;
+
+            } else if (topic === 7) {
+                let a = rand(1, 3), b = rand(1, 3), c = rand(1, 3), d = rand(2, 4);
+                let det = (a * d) - (b * c);
+                while (det === 0) {
+                    d += 1;
+                    det = (a * d) - (b * c);
+                }
+                correctAnswer = d;
+
+                questionHtml = `<div class="flex items-center gap-2 justify-center flex-wrap"><span>ถ้า A = </span>${renderMatrixHTML([[a, b], [c, d]])} <span>จงหาค่าตำแหน่ง [1,1] ของ adj(A)</span></div>`;
+                explanation = `<strong>อินเวอร์สการคูณเมทริกซ์:</strong> สำหรับเมทริกซ์ 2x2 adj(A) สลับตำแหน่งแนวทแยงหลัก [1,1] คือ <code>${d}</code>`;
+
+            } else {
+                const xVal = rand(1, 5);
+                const yVal = rand(1, 5);
+                const eq1 = xVal + yVal;
+                const eq2 = xVal - yVal;
+                correctAnswer = xVal;
+
+                questionHtml = `<div class="text-center"><span>จากระบบสมการเชิงเส้น:</span><br><code>x + y = ${eq1}</code><br><code>x - y = ${eq2}</code><br><span>จงหาค่าของ x โดยใช้เมทริกซ์</span></div>`;
+                explanation = `<strong>การแก้ระบบสมการเชิงเส้นโดยใช้เมทริกซ์:</strong> บวกสองสมการเข้าด้วยกัน: <code>2x = ${eq1 + eq2}</code> จะได้ <strong>x = ${xVal}</strong>`;
+            }
+
+            options = [correctAnswer];
+            while (options.length < 4) {
+                const wrong = correctAnswer + rand(-8, 8);
+                if (wrong !== correctAnswer && !options.includes(wrong)) {
+                    options.push(wrong);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            return { questionHtml, correctAnswer, options, explanation };
+        }
+
+        // --- MULTIPLAYER ROOM & PEERJS ---
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            return code;
+        }
+
+        function createRoom() {
+            const u = gameState.myPlayer.username;
+            if (!u) return;
+
+            audioFX.playClick();
+            if (typeof Peer === 'undefined') return;
+
+            const code = generateRoomCode();
+            currentRoomId = code;
+            isHost = true;
+            
+            const role = document.getElementById('select-player-role').value;
+            gameState.myPlayer.role = role;
+
+            const topicCheckboxes = document.querySelectorAll('.topic-check:checked');
+            const selected = Array.from(topicCheckboxes).map(cb => parseInt(cb.value));
+            if (selected.length === 0) {
+                showToast("กรุณาเลือกอย่างน้อย 1 เรื่องที่จะทดสอบ", false);
+                return;
+            }
+            gameState.selectedTopics = selected;
+            gameState.timeLimitMin = parseInt(document.getElementById('select-time-limit').value);
+
+            const peerRoomId = 'MXRPG-' + code;
+            if (peer) peer.destroy();
+            peer = new Peer(peerRoomId);
+
+            peer.on('open', (id) => {
+                gameState.myPlayer.id = id;
+                showToast("สร้างห้องสำเร็จ! รหัสห้องคือ " + code, true);
+                roomState = {
+                    status: 'waiting',
+                    topics: gameState.selectedTopics,
+                    timeLimitMin: gameState.timeLimitMin,
+                    currentTopic: gameState.selectedTopics[0],
+                    players: {
+                        [u]: {
+                            id: id,
+                            username: u,
+                            color: gameState.myPlayer.color,
+                            role: role,
+                            score: 0,
+                            isHost: true
+                        }
+                    }
+                };
+                renderLobbyRoomView(roomState);
+            });
+
+            peer.on('connection', (conn) => {
+                if (Object.keys(roomState.players).length >= 50) {
+                    conn.send({ type: 'FULL' });
+                    conn.close();
+                    return;
+                }
+                guestConnections.push(conn);
+                conn.on('data', (data) => handleHostReceivedData(conn, data));
+                conn.on('close', () => {
+                    guestConnections = guestConnections.filter(c => c !== conn);
+                    if (conn.peerUsername && roomState.players[conn.peerUsername]) {
+                        delete roomState.players[conn.peerUsername];
+                        broadcastRoomState();
+                        renderLobbyRoomView(roomState);
+                    }
+                });
+            });
+
+            document.getElementById('lobby-room-controls').classList.add('hidden');
+            document.getElementById('lobby-active-room-box').classList.remove('hidden');
+            document.getElementById('display-room-code').textContent = code;
+        }
+
+        function joinRoomByCode(code) {
+            const u = gameState.myPlayer.username;
+            if (!u) return;
+
+            audioFX.playClick();
+            if (typeof Peer === 'undefined') return;
+
+            const targetRoomId = 'MXRPG-' + code.toUpperCase();
+            currentRoomId = code.toUpperCase();
+            isHost = false;
+
+            const role = document.getElementById('select-player-role').value;
+            gameState.myPlayer.role = role;
+
+            if (peer) peer.destroy();
+            peer = new Peer();
+
+            peer.on('open', (myId) => {
+                gameState.myPlayer.id = myId;
+                hostConn = peer.connect(targetRoomId);
+
+                hostConn.on('open', () => {
+                    hostConn.send({
+                        type: 'JOIN',
+                        player: {
+                            id: myId,
+                            username: u,
+                            color: gameState.myPlayer.color,
+                            role: role,
+                            score: 0,
+                            isHost: false
+                        }
+                    });
+                });
+
+                hostConn.on('data', (data) => {
+                    if (data.type === 'DUPLICATE_NAME') {
+                        showToast("❌ ชื่อผู้ใช้นี้ (Username) ซ้ำกับผู้เล่นอื่นในห้องนี้!", false);
+                        hostConn.close();
+                    } else if (data.type === 'ROOM_CLOSED') {
+                        showToast("⚠️ หัวหน้าห้องได้ทำการยุบห้องแล้ว", false);
+                        returnToLobbyFromGame();
+                    } else {
+                        handleGuestReceivedData(data);
+                    }
+                });
+            });
+
+            document.getElementById('lobby-room-controls').classList.add('hidden');
+            document.getElementById('lobby-active-room-box').classList.remove('hidden');
+            document.getElementById('display-room-code').textContent = code.toUpperCase();
+            document.getElementById('host-config-panel').classList.add('hidden');
+        }
+
+        function handleHostReceivedData(conn, data) {
+            if (data.type === 'JOIN') {
+                if (roomState.players[data.player.username]) {
+                    conn.send({ type: 'DUPLICATE_NAME' });
+                    return;
+                }
+                conn.peerUsername = data.player.username;
+                roomState.players[data.player.username] = data.player;
+                broadcastRoomState();
+                renderLobbyRoomView(roomState);
+                showToast(`✨ ผู้เล่น ${data.player.username} เข้าร่วมห้องแล้ว`, true);
+            } else if (data.type === 'PLAYER_UPDATE') {
+                if (roomState.players[data.player.username]) {
+                    roomState.players[data.player.username].score = data.player.score;
+                    broadcastRoomState();
+                    renderLobbyRoomView(roomState);
+                    renderBattlePartyCards();
+                    renderSpectatorLeaderboard();
+                }
+            }
+        }
+
+        function broadcastRoomState() {
+            guestConnections.forEach(conn => {
+                if (conn.open) conn.send({ type: 'ROOM_STATE', roomState });
+            });
+        }
+
+        function handleGuestReceivedData(data) {
+            if (data.type === 'ROOM_STATE') {
+                roomState = data.roomState;
+                renderLobbyRoomView(roomState);
+                renderBattlePartyCards();
+                renderSpectatorLeaderboard();
+                
+                if (roomState.status === 'playing') {
+                    if (gameState.myPlayer.role === 'spectator') {
+                        showScreen('screen-spectator');
+                    } else {
+                        if (document.getElementById('screen-battle').classList.contains('hidden')) {
+                            showScreen('screen-battle');
+                            startQuizJourney();
+                        }
+                    }
+                }
+            }
+        }
+
+        function returnToLobbyFromGame() {
+            audioFX.playClick();
+            clearInterval(gameState.timerInterval);
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            isHost = false;
+            currentRoomId = null;
+            document.getElementById('lobby-room-controls').classList.remove('hidden');
+            document.getElementById('lobby-active-room-box').classList.add('hidden');
+            document.getElementById('host-config-panel').classList.remove('hidden');
+            showScreen('screen-lobby');
+        }
+
+        function collapseRoom() {
+            audioFX.playClick();
+            if (isHost) {
+                guestConnections.forEach(conn => {
+                    if (conn.open) conn.send({ type: 'ROOM_CLOSED' });
+                });
+            }
+            returnToLobbyFromGame();
+            showToast("ยุบห้องและกลับสู่ล็อปบี้เรียบร้อยแล้ว", true);
+        }
+
+        function renderLobbyRoomView(roomData) {
+            const playersGrid = document.getElementById('room-players-grid');
+            if (!playersGrid) return;
+            playersGrid.innerHTML = '';
+
+            const playerArray = Object.values(roomData.players || {});
+            document.getElementById('room-player-count').textContent = playerArray.length;
+
+            playerArray.forEach(p => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-900/90 border border-slate-700 p-2.5 rounded-xl flex items-center justify-between text-xs";
+                card.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-slate-950 shadow text-[10px]" style="background-color: ${p.color || '#f59e0b'}">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <span class="font-extrabold text-white truncate max-w-[100px]">${p.username}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        ${p.isHost ? '<span class="bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-black text-[9px]">HOST</span>' : ''}
+                        ${p.role === 'spectator' ? '<span class="bg-teal-500 text-slate-950 px-1.5 py-0.5 rounded font-black text-[9px]">OBSERVER</span>' : '<span class="bg-blue-500 text-white px-1.5 py-0.5 rounded font-black text-[9px]">PLAYER</span>'}
+                    </div>`;
+                playersGrid.appendChild(card);
+            });
+
+            const hostActions = document.getElementById('lobby-host-actions');
+            const waitBadge = document.getElementById('host-wait-badge');
+
+            if (isHost) {
+                hostActions.classList.remove('hidden');
+                waitBadge.textContent = "👑 คุณคือผู้สังเกตการณ์ / หัวหน้าห้อง";
+            } else {
+                hostActions.classList.add('hidden');
+                waitBadge.textContent = "⏳ รอผู้สังเกตการณ์กดเริ่มการทดสอบ...";
+            }
+        }
+
+        function renderBattlePartyCards() {
+            const container = document.getElementById('battle-party-cards');
+            if (!container || !roomState || !roomState.players) return;
+            container.innerHTML = '';
+
+            Object.values(roomState.players).forEach(p => {
+                if (p.role === 'player') {
+                    const card = document.createElement('div');
+                    card.className = "glass-panel p-2 rounded-xl flex items-center gap-2 border border-slate-700/60 text-xs";
+                    card.innerHTML = `
+                        <div class="w-6 h-6 rounded-lg flex items-center justify-center font-bold text-slate-950 shrink-0 text-[10px]" style="background-color: ${p.color || '#f59e0b'}">
+                            <i class="fa-solid fa-shield"></i>
+                        </div>
+                        <div class="overflow-hidden flex-1">
+                            <div class="font-bold truncate text-slate-100">${p.username}</div>
+                            <div class="text-[10px] text-amber-400 font-extrabold">${p.score || 0} คะแนน</div>
+                        </div>`;
+                    container.appendChild(card);
+                }
+            });
+        }
+
+        function renderSpectatorLeaderboard() {
+            const container = document.getElementById('spectator-leaderboard');
+            if (!container || !roomState || !roomState.players) return;
+            container.innerHTML = '';
+
+            const sorted = Object.values(roomState.players).sort((a,b) => (b.score||0) - (a.score||0));
+            sorted.forEach((p, idx) => {
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between bg-slate-900 border border-slate-800 p-2 rounded-xl text-xs";
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-teal-500/20 text-teal-400 font-black flex items-center justify-center border border-teal-500/40 text-[10px]">#${idx+1}</span>
+                        <div class="w-6 h-6 rounded-lg flex items-center justify-center text-slate-950 text-[10px]" style="background-color: ${p.color || '#f59e0b'}">
+                            <i class="fa-solid fa-user"></i>
+                        </div>
+                        <span class="font-extrabold text-white">${p.username}</span>
+                        ${p.role === 'spectator' ? '<span class="text-[9px] text-teal-400 font-bold">(ผู้สังเกตการณ์)</span>' : ''}
+                    </div>
+                    <span class="text-amber-400 font-black font-mono">${p.score || 0} คะแนน</span>`;
+                container.appendChild(item);
+            });
+        }
+
+        // --- TIMER & QUIZ FLOW ---
+        function startTimer(min) {
+            if (min <= 0) {
+                document.getElementById('game-timer-display').textContent = "ไม่จำกัดเวลา";
+                document.getElementById('spec-timer-display').textContent = "ไม่จำกัดเวลา";
+                return;
+            }
+            gameState.timeRemainingSec = min * 60;
+            clearInterval(gameState.timerInterval);
+
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeRemainingSec--;
+                const m = Math.floor(gameState.timeRemainingSec / 60);
+                const s = gameState.timeRemainingSec % 60;
+                const formatted = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                
+                document.getElementById('game-timer-display').textContent = formatted;
+                document.getElementById('spec-timer-display').textContent = formatted;
+
+                if (gameState.timeRemainingSec <= 0) {
+                    clearInterval(gameState.timerInterval);
+                    showToast("⏰ หมดเวลาการทดสอบ!", false);
+                    saveUserProfile(gameState.myPlayer.username, gameState.totalQuizScore, (gameState.timeLimitMin*60));
+                }
+            }, 1000);
+        }
+
+        function startQuizJourney() {
+            gameState.currentTopicIndex = 0;
+            gameState.currentQuestionIdx = 0;
+            gameState.stageCorrectCount = 0;
+            gameState.totalQuizScore = 0;
+            startTimer(roomState.timeLimitMin || 10);
+            loadNextQuiz();
+        }
+
+        function loadNextQuiz() {
+            const topicId = roomState.topics[gameState.currentTopicIndex];
+            const topicMeta = STAGE_TOPICS[topicId];
+
+            if (!topicMeta) {
+                showToast(`🏆 สิ้นสุดการทดสอบทุกเรื่อง! คะแนนรวมของคุณคือ ${gameState.totalQuizScore} คะแนน`, true);
+                saveUserProfile(gameState.myPlayer.username, gameState.totalQuizScore, (gameState.timeLimitMin*60 - gameState.timeRemainingSec));
+                
+                // Show completion and return to lobby button
+                document.getElementById('quiz-question-container').innerHTML = `
+                    <div class="text-center py-2">
+                        <h3 class="text-xl font-black text-amber-400 mb-1">🎉 ยินดีด้วย! ทำแบบทดสอบครบทุกเรื่องแล้ว</h3>
+                        <p class="text-slate-200 text-sm mb-3">คะแนนรวมทั้งหมดของคุณ: <span class="text-amber-300 font-bold">${gameState.totalQuizScore}</span> คะแนน</p>
+                        <button onclick="returnToLobbyFromGame()" class="btn-rpg px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm cursor-pointer shadow-lg inline-flex items-center gap-2">
+                            <i class="fa-solid fa-house"></i> กลับสู่หน้าล็อปบี้
+                        </button>
+                    </div>
+                `;
+                document.getElementById('quiz-options-grid').innerHTML = '';
+                return;
+            }
+
+            document.getElementById('battle-stage-tag').textContent = `เรื่องที่ ${topicId}: ${topicMeta.title}`;
+            document.getElementById('battle-wave-tag').textContent = `ข้อที่: ${gameState.currentQuestionIdx + 1} / ${topicMeta.count}`;
+
+            const quiz = generateMatrixQuiz(topicId, gameState.currentQuestionIdx);
+            gameState.currentQuiz = quiz;
+            document.getElementById('quiz-question-container').innerHTML = quiz.questionHtml;
+
+            const grid = document.getElementById('quiz-options-grid');
+            grid.innerHTML = '';
+            quiz.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "btn-rpg py-3 bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-amber-300 font-black text-xl rounded-2xl border-2 border-amber-500/50 cursor-pointer shadow-xl";
+                btn.textContent = opt;
+                btn.onclick = () => handleAnswerChoice(opt);
+                grid.appendChild(btn);
+            });
+        }
+
+        function handleAnswerChoice(selectedVal) {
+            const isCorrect = selectedVal === gameState.currentQuiz.correctAnswer;
+
+            if (isCorrect) {
+                audioFX.playCorrect();
+                triggerConfetti();
+                gameState.stageCorrectCount++;
+                gameState.totalQuizScore += 20;
+                gameState.myPlayer.score = gameState.totalQuizScore;
+                document.getElementById('my-score-display').textContent = gameState.totalQuizScore;
+                showToast("✨ ถูกต้อง! +20 คะแนน", true);
+                
+                if (gameState.myPlayer.username && roomState.players[gameState.myPlayer.username]) {
+                    roomState.players[gameState.myPlayer.username].score = gameState.totalQuizScore;
+                    if (isHost) {
+                        broadcastRoomState();
+                        renderBattlePartyCards();
+                        renderSpectatorLeaderboard();
+                    } else if (hostConn && hostConn.open) {
+                        hostConn.send({
+                            type: 'PLAYER_UPDATE',
+                            player: { username: gameState.myPlayer.username, score: gameState.totalQuizScore }
+                        });
+                    }
+                }
+
+                gameState.currentQuestionIdx++;
+                checkProgressNext();
+            } else {
+                audioFX.playWrong();
+                document.getElementById('solution-correct-ans').textContent = gameState.currentQuiz.correctAnswer;
+                document.getElementById('solution-explanation-text').innerHTML = gameState.currentQuiz.explanation;
+                document.getElementById('modal-solution').classList.remove('hidden');
+            }
+        }
+
+        function checkProgressNext() {
+            const topicId = roomState.topics[gameState.currentTopicIndex];
+            const topicMeta = STAGE_TOPICS[topicId];
+
+            if (gameState.currentQuestionIdx >= topicMeta.count) {
+                gameState.currentTopicIndex++;
+                gameState.currentQuestionIdx = 0;
+                showToast(`🎉 ผ่านเรื่องที่ ${topicId} เรียบร้อย! เข้าสู่เรื่องถัดไป`, true);
+                setTimeout(() => loadNextQuiz(), 1200);
+            } else {
+                loadNextQuiz();
+            }
+        }
+
+        function showScreen(screenId) {
+            document.getElementById('screen-auth').classList.add('hidden');
+            document.getElementById('screen-lobby').classList.add('hidden');
+            document.getElementById('screen-battle').classList.add('hidden');
+            document.getElementById('screen-spectator').classList.add('hidden');
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text);
+            } else {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = text;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // เอาการโหลด 3D scene เดิมออก
+
+            // Auth Tab Switching
+            document.getElementById('tab-btn-login').onclick = () => {
+                gameState.authMode = 'login';
+                document.getElementById('tab-btn-login').className = "flex-1 py-2 rounded-lg font-bold text-sm bg-amber-500 text-slate-950 transition";
+                document.getElementById('tab-btn-register').className = "flex-1 py-2 rounded-lg font-bold text-sm text-slate-400 hover:text-white transition";
+                document.getElementById('btn-submit-auth').innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ';
+            };
+
+            document.getElementById('tab-btn-register').onclick = () => {
+                gameState.authMode = 'register';
+                document.getElementById('tab-btn-register').className = "flex-1 py-2 rounded-lg font-bold text-sm bg-amber-500 text-slate-950 transition";
+                document.getElementById('tab-btn-login').className = "flex-1 py-2 rounded-lg font-bold text-sm text-slate-400 hover:text-white transition";
+                document.getElementById('btn-submit-auth').innerHTML = '<i class="fa-solid fa-user-plus"></i> สมัครสมาชิกใหม่';
+            };
+
+            document.getElementById('btn-submit-auth').onclick = () => handleAuthSubmit();
+
+            document.getElementById('btn-logout').onclick = () => {
+                gameState.myPlayer.username = "";
+                showScreen('screen-auth');
+            };
+
+            document.getElementById('btn-show-my-stats').onclick = () => {
+                const role = document.getElementById('select-player-role').value;
+                showUserStats(role === 'spectator' ? null : gameState.myPlayer.username);
+            };
+
+            document.getElementById('btn-close-room-spec').onclick = () => {
+                collapseRoom();
+            };
+
+            document.getElementById('btn-open-all-stats').onclick = () => {
+                showUserStats(null);
+            };
+
+            document.getElementById('btn-close-stats').onclick = () => {
+                document.getElementById('modal-stats').classList.add('hidden');
+            };
+
+            document.getElementById('btn-create-room').onclick = () => createRoom();
+            document.getElementById('btn-join-room').onclick = () => {
+                const code = document.getElementById('input-room-code').value.trim();
+                if (code) joinRoomByCode(code);
+            };
+
+            document.getElementById('btn-copy-code').onclick = () => {
+                if (!currentRoomId) return;
+                copyToClipboard(currentRoomId);
+                showToast(`📋 คัดลอกรหัสห้อง [ ${currentRoomId} ] เรียบร้อยแล้ว!`, true);
+            };
+
+            document.getElementById('btn-copy-room-link').onclick = () => {
+                if (!currentRoomId) return;
+                copyToClipboard(`เข้าร่วมทดสอบเมทริกซ์! รหัสห้อง: ${currentRoomId}`);
+                showToast("📋 คัดลอกข้อความเชิญเรียบร้อยแล้ว!", true);
+            };
+
+            document.getElementById('btn-host-start-game').onclick = () => {
+                if (!currentRoomId || !isHost) return;
+                audioFX.playClick();
+                roomState.status = 'playing';
+                broadcastRoomState();
+
+                if (gameState.myPlayer.role === 'spectator') {
+                    showScreen('screen-spectator');
+                    renderSpectatorLeaderboard();
+                    startTimer(roomState.timeLimitMin || 10);
+                } else {
+                    showScreen('screen-battle');
+                    startQuizJourney();
+                }
+            };
+
+            document.getElementById('btn-next-question').onclick = () => {
+                audioFX.playClick();
+                document.getElementById('modal-solution').classList.add('hidden');
+                gameState.currentQuestionIdx++;
+                checkProgressNext();
+            };
+
+            // เอา color picker onclick การเปลี่ยนสีตัวละครออก
+        });
+    </script>
+</body>
+</html>
